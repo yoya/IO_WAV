@@ -27,7 +27,7 @@ class IO_WAV {
             $magick = $bit->getData(4);
         }
         if ($magick !== "WAVE") {
-            throw new Exception("must be start with WAVEfmt ");
+            throw new Exception("must be start with WAVE");
         }
         while ($bit->hasNextData(8)) {
             list($startOffset, $dummy) = $bit->getOffset();
