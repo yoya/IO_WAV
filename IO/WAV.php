@@ -31,17 +31,20 @@ class IO_WAV {
         }
         while ($bit->hasNextData(8)) {
             list($startOffset, $dummy) = $bit->getOffset();
-            $chunk = ["_offset" => $startOffset];
+            $chunk = ["_chunkOffset" => $startOffset,
+                      "_chunkSize" => null];
             try {
                 $this->parseChunk($bit, $chunk);
             } catch (Exception $e) {
                 fprintf(STDERR, "WARNING: ".$e->getMessage()."\n");
             }
-            $this->_wavChunks []= $chunk;
             if (isset($chunk["ChunkSize"])) {
                 $chunkSize = $chunk["ChunkSize"];
+                $chunk["_chunkSize"] = $chunkSize;
                 $bit->setOffset($startOffset + $chunkSize  + 8, 0);
-            } else {
+            }
+            $this->_wavChunks []= $chunk;
+            if (! isset($chunk["ChunkSize"])) {
                 break; // abnormal termination
             }
         }
