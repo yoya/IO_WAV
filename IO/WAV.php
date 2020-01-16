@@ -16,6 +16,32 @@ class IO_WAV {
     var $_wavdata = null;
     var $_wavChunks = [];
     var $_RIFFLength = null;
+    const WAVE_FORMAT_PCM        = 0x1;
+    const WAVE_FORMAT_ADPCM      = 0x2;
+    const WAVE_FORMAT_IEEE_FLOAT = 0x3;
+    const WAVE_FORMAT_ALAW       = 0x6;
+    const WAVE_FORMAT_MULAW      = 0x7;
+    const WAVE_FORMAT_DRM        = 0x9;
+    const WAVE_FORMAT_MPEGLAYER3 = 0x55;
+    const WAVE_FORMAT_SWF_ADPCM  = 0x5346;
+    const WAVE_FORMAT_EXTENSIBLE = 0xFFFE;
+    function getFormatName($formatTag) {
+        static $formatNameTable = [
+            self::WAVE_FORMAT_PCM        => "PCM",
+            self::WAVE_FORMAT_ADPCM      => "ADPCM",
+            self::WAVE_FORMAT_IEEE_FLOAT => "IEEE_FLOAT",
+            self::WAVE_FORMAT_ALAW       => "ALAW",
+            self::WAVE_FORMAT_MULAW      => "MULAW",
+            self::WAVE_FORMAT_DRM        => "DRM",
+            self::WAVE_FORMAT_MPEGLAYER3 => "MPEGLAYER3",
+            self::WAVE_FORMAT_SWF_ADPCM  => "SWF_ADPCM",
+            self::WAVE_FORMAT_EXTENSIBLE => "EXTENSIBLE",
+        ];
+        if (isset($formatNameTable[$formatTag])) {
+            return $formatNameTable[$formatTag];
+        }
+        return "Unknown WAVE_FORMAT";
+    }
     function parse($wavdata) {
         $this->_wavdata = $wavdata;
         $this->_RIFFLength = false;
@@ -68,24 +94,34 @@ class IO_WAV {
             $chunk["SamplesPerSec"] = $bit->getUI32LE();
             $chunk["AvgBytesPerSec"]= $bit->getUI32LE();
             $chunk["BlockAlign"] = $bit->getUI16LE();
-            // WAVEFORMATEX structure
-            // https://docs.microsoft.com/en-us/windows/win32/api/mmeapi/ns-mmeapi-waveformatex
             if ($chunkSize <= 14) {
                 break;
             }
-            $chunk["BitsPerSample"] = $bit->getUI16LE();
+            // WAVEFORMATEX structure
+            // https://docs.microsoft.com/en-us/windows/win32/api/mmeapi/ns-mmeapi-waveformatex
+            $chunk["BitsPerSample"] = $bit->getUI16LE(); // for PCM
             if ($chunkSize <= 16) {
                 break;
             }
             if ($formatTag === 1) { // PCM
                 fprintf(STDERR, "Warning: too long fmt chunk for audio format PCM\n");
             }
+            $chunk["cbSize"] = $bit->getUI16LE();
+            if ($chunkSize <= 18) {
+                break;
+            }
             // WAVEFORMATEXTENSIBLE structure
             // https://docs.microsoft.com/ja-jp/windows/win32/api/mmreg/ns-mmreg-waveformatextensible_1
-            $chunk["cbSize"] = $bit->getUI16LE();
-            $chunk["ValidBitsPerSample"] = $bit->getUI16LE();
-            $chunk["ChannelMask"] = $bit->getUI32LE();
-            $chunk["SubFormat"] = $bit->getData(16);  // GUID
+            switch ($formatTag) {
+            case self::WAVE_FORMAT_ADPCM:
+                $chunk["SamplesPerBlock"] = $bit->getUI16LE();
+                $chunk["NumCoef"] = $bit->getUI16LE();
+                break;
+            default:
+                $chunk["ValidBitsPerSample"] = $bit->getUI16LE();
+                $chunk["ChannelMask"] = $bit->getUI32LE();
+                $chunk["SubFormat"] = $bit->getData(16);  // GUID
+            }
             break;
         case "data":
             $chunk["Data"] = $bit->getData($chunkSize - 8);
@@ -120,12 +156,14 @@ class IO_WAV {
         echo " ID:$chunkID Size:$chunkSize\n";
         switch ($chunkID) {
         case "fmt ":
-            echo "    FormatTag:".$chunk["FormatTag"];
+            $formatTag = $chunk["FormatTag"];
+            $formatName = self::getFormatName($formatTag);
+            echo "    FormatTag:$formatTag($formatName)";
             echo " Channels:".$chunk["Channels"];
             echo " SamplesPerSec:".$chunk["SamplesPerSec"];
-            echo " AvgBytesPerSec:".$chunk["AvgBytesPerSec"];
             echo PHP_EOL;
-            echo "    BlockAlign:".$chunk["BlockAlign"];
+            echo "    AvgBytesPerSec:".$chunk["AvgBytesPerSec"];
+            echo " BlockAlign:".$chunk["BlockAlign"];
             if ($chunkSize <= 14) {
                 echo PHP_EOL;
                 break;
@@ -136,11 +174,24 @@ class IO_WAV {
                 break;
             }
             echo "    cbSize:".$chunk["cbSize"];
-            echo " ValidBitsPerSample:".$chunk["ValidBitsPerSample"];
-            echo " ChannelMask:".$chunk["ChannelMask"];
             echo PHP_EOL;
-            echo "    SubFormat:".chunk_split(bin2hex($chunk["SubFormat"]), 8, " ");
-            echo PHP_EOL;
+            if ($chunkSize <= 18) {
+                break;
+            }
+            switch ($formatTag) {
+            case self::WAVE_FORMAT_ADPCM:
+                echo "    SamplesPerBlock:".$chunk["SamplesPerBlock"];
+                echo " NumCoef:".$chunk["NumCoef"];
+                echo PHP_EOL;
+                break;
+            default:
+                echo "    ValidBitsPerSample:".$chunk["ValidBitsPerSample"];
+                echo " ChannelMask:".$chunk["ChannelMask"];
+                echo PHP_EOL;
+                echo "    SubFormat:".chunk_split(bin2hex($chunk["SubFormat"]), 4, " ");
+                echo PHP_EOL;
+                break;
+            }
             break;
         case "data":
             echo "    Data(size:".strlen($chunk["Data"]).")\n";
