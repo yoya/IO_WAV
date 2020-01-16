@@ -29,24 +29,29 @@ class IO_WAV {
         if ($magick !== "WAVE") {
             throw new Exception("must be start with WAVEfmt ");
         }
-        while ($bit->hasNextData(6)) {
+        while ($bit->hasNextData(8)) {
             list($startOffset, $dummy) = $bit->getOffset();
-            $chunkID = $bit->getData(4);
-            $chunkSize = $bit->getUI32LE();
-            $chunk = ["_offset" => $startOffset,
-                      "ChunkID" => $chunkID, "ChunkSize"=> $chunkSize];
+            $chunk = ["_offset" => $startOffset];
             try {
-                $this->parseChunk($chunk, $bit);
+                $this->parseChunk($bit, $chunk);
             } catch (Exception $e) {
                 fprintf(STDERR, "WARNING: ".$e->getMessage()."\n");
             }
             $this->_wavChunks []= $chunk;
-            $bit->setOffset($startOffset + $chunkSize - 8, 0);
+            if (isset($chunk["ChunkSize"])) {
+                $chunkSize = $chunk["ChunkSize"];
+                $bit->setOffset($startOffset + $chunkSize  + 8, 0);
+            } else {
+                break; // abnormal termination
+            }
         }
     }
-    function parseChunk(&$chunk, $bit) {
-        $chunkID = $chunk["ChunkID"];
-        $chunkSize = $chunk["ChunkSize"];
+    function parseChunk($bit, &$chunk) {
+        $chunkID = $bit->getData(4);
+        $chunkSize = $bit->getUI32LE();
+        echo "chunkSize:$chunkSize\n";
+        $chunk["ChunkID"] = $chunkID;
+        $chunk["ChunkSize"] = $chunkSize;
         switch ($chunkID) {
         case "fmt ":
             // https://docs.microsoft.com/en-us/windows/win32/api/mmeapi/ns-mmeapi-waveformat
@@ -55,7 +60,7 @@ class IO_WAV {
             $chunk["SamplesPerSec"] = $bit->getUI32LE();
             $chunk["AvgBytesPerSec"]= $bit->getUI32LE();
             $chunk["BlockAlign"] = $bit->getUI16LE();
-            $chunk["WaveData"] = $bit->getData($chunkSize - 14);
+            $chunk["WaveData"] = $bit->getData($chunkSize - 22);
             break;
         default:
             $chunk["WaveData"] = $bit->getData($chunkSize);
