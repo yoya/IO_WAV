@@ -16,6 +16,7 @@ class IO_WAV {
     var $_wavdata = null;
     var $_wavChunks = [];
     var $_RIFFLength = null;
+    const WAVE_FORMAT_UNKNOWN    = 0x0;
     const WAVE_FORMAT_PCM        = 0x1;
     const WAVE_FORMAT_ADPCM      = 0x2;
     const WAVE_FORMAT_IEEE_FLOAT = 0x3;
@@ -27,14 +28,15 @@ class IO_WAV {
     const WAVE_FORMAT_EXTENSIBLE = 0xFFFE;
     function getFormatName($formatTag) {
         static $formatNameTable = [
-            self::WAVE_FORMAT_PCM        => "PCM",
-            self::WAVE_FORMAT_ADPCM      => "ADPCM",
+            self::WAVE_FORMAT_UNKNOWN    => "UNKNOWN",    // Microsoft Unknown
+            self::WAVE_FORMAT_PCM        => "PCM",        // Microsoft PCM
+            self::WAVE_FORMAT_ADPCM      => "ADPCM",      // Microsoft ADPCM
             self::WAVE_FORMAT_IEEE_FLOAT => "IEEE_FLOAT",
-            self::WAVE_FORMAT_ALAW       => "ALAW",
-            self::WAVE_FORMAT_MULAW      => "MULAW",
+            self::WAVE_FORMAT_ALAW       => "ALAW",       // Microsoft ALAW
+            self::WAVE_FORMAT_MULAW      => "MULAW",      // Microsoft MULAW
             self::WAVE_FORMAT_DRM        => "DRM",
             self::WAVE_FORMAT_MPEGLAYER3 => "MPEGLAYER3",
-            self::WAVE_FORMAT_SWF_ADPCM  => "SWF_ADPCM",
+            self::WAVE_FORMAT_SWF_ADPCM  => "SWF_ADPCM",  // Adobe SWF ADPCM
             self::WAVE_FORMAT_EXTENSIBLE => "EXTENSIBLE",
         ];
         if (isset($formatNameTable[$formatTag])) {
